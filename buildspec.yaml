@@ -1,0 +1,18 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - apt-get update -y || true
+      - apt-get install -y unzip jq || true
+      - wget https://releases.hashicorp.com/terraform/1.5.8/terraform_1.5.8_linux_amd64.zip -O /tmp/terraform.zip
+      - unzip /tmp/terraform.zip -d /usr/local/bin
+      - terraform --version
+
+  pre_build:
+    commands:
+      - cd infra/terraform   # change to your terraform_working_dir
+
+  build:
+    commands:
+      - if [ -f tfplan ]; then terraform apply -input=false -auto-approve tfplan; else echo "tfplan not found"; exit 1; fi
