@@ -23,16 +23,23 @@ phases:
   build:
     commands:
       - echo "Searching for tfplan produced by the Plan stage..."
-      # Look for a tfplan that CodePipeline/CodeBuild supplied in the input artifacts.
-      # We search under the CodeBuild output root to be robust across artifact layouts.
-      - TFPLAN_PATH=$(find /codebuild/output -type f -name tfplan -print -quit || true)
-      - if [ -n "$TFPLAN_PATH" ]; then echo "Found tfplan at: $TFPLAN_PATH"; cp "$TFPLAN_PATH" ./tfplan; else echo "tfplan not found in artifacts."; fi
-      - if [ -f ./tfplan ]; then
-          echo "Applying plan (tfplan) ...";
-          terraform apply -input=false -auto-approve ./tfplan;
+      - |
+        # Look for a tfplan that CodePipeline/CodeBuild supplied in the input artifacts.
+        # We search under the CodeBuild output root to be robust across artifact layouts.
+        TFPLAN_PATH=$(find /codebuild/output -type f -name tfplan -print -quit || true)
+        if [ -n "$TFPLAN_PATH" ]; then
+          echo "Found tfplan at: $TFPLAN_PATH"
+          cp "$TFPLAN_PATH" ./tfplan
         else
-          echo "ERROR: tfplan missing — aborting (to avoid accidental apply).";
-          exit 1;
+          echo "tfplan not found in artifacts."
+        fi
+      - |
+        if [ -f ./tfplan ]; then
+          echo "Applying plan (tfplan) ..."
+          terraform apply -input=false -auto-approve ./tfplan
+        else
+          echo "ERROR: tfplan missing — aborting (to avoid accidental apply)."
+          exit 1
         fi
 
 post_build:
