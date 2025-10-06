@@ -15,7 +15,6 @@ phases:
   pre_build:
     commands:
       - echo "Preparing workspace..."
-      # Change to your terraform working dir inside the repo (update if different)
       - cd infra/terraform
       - echo "Terraform working directory: $(pwd)"
       - terraform init -input=false
@@ -24,9 +23,7 @@ phases:
     commands:
       - echo "Searching for tfplan produced by the Plan stage..."
       - |
-        # Look for a tfplan that CodePipeline/CodeBuild supplied in the input artifacts.
-        # We search under the CodeBuild output root to be robust across artifact layouts.
-        TFPLAN_PATH=$(find /codebuild/output -type f -name tfplan -print -quit || true)
+        TFPLAN_PATH=$(find /codebuild/output -type f -name 'tfplan*' -print -quit || true)
         if [ -n "$TFPLAN_PATH" ]; then
           echo "Found tfplan at: $TFPLAN_PATH"
           cp "$TFPLAN_PATH" ./tfplan
