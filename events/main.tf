@@ -4,10 +4,6 @@ terraform {
   }
 }
 
-provider "aws" {
-  # inherited from root module
-}
-
 # --- EventBridge rules (mutually exclusive) ---
 resource "aws_cloudwatch_event_rule" "rule_schedule" {
   count               = var.event_pattern == "" ? 1 : 0
