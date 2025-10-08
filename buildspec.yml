@@ -7,7 +7,20 @@ phases:
       - apt-get update -y || true
       - apt-get install -y unzip wget jq python3-pip || true
       - echo "Installing Terraform..."
-      - wget https://releases.hashicorp.com/terraform/1.5.8/terraform_1.5.8_linux_amd64.zip -O /tmp/t.zip
+      - if wget -q -O "${TF_ZIP}" "${TF_URL}"; then
+          echo "Terraform zip downloaded to ${TF_ZIP}";
+          unzip -o "${TF_ZIP}" -d /usr/local/bin;
+        else
+          echo "Download failed — falling back to HashiCorp APT repo install";
+          # Add HashiCorp APT repository and install terraform via apt
+          wget -q -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg || true
+          DIST_CODENAME=$(lsb_release -cs || echo "focal")
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com ${DIST_CODENAME} main" \
+          > /etc/apt/sources.list.d/hashicorp.list
+          apt-get update -y || true
+          apt-get install -y terraform || { echo "apt install terraform failed"; exit 1; }
+        fi
+      - terraform --version || true
       - unzip -o /tmp/t.zip -d /usr/local/bin
   pre_build:
     commands:
