@@ -12,7 +12,9 @@ phases:
   pre_build:
     commands:
       - echo "Preparing terraform workspace"
+      - pwd
       - cd code-deployment-testing
+      - pwd
       - terraform init -input=false
   build:
     commands:
