@@ -1,44 +1,134 @@
 version: 0.2
 
+# Environment variables you can configure in CodeBuild or pass from CodePipeline:
+# - TERRAFORM_RUN: "none" (default) | "plan"  -> run terraform init + plan
+# - TERRAFORM_WORKING_DIR: path to terraform code to plan (default: "infra")
+# - TERRAFORM_VERSION: version of terraform to install (default: "1.5.8")
+# - PACKAGE_LAMBDAS: "true" | "false" (default: "true") -> package lambdas in lambdas/* into dist/
+# - PIP_REQUIREMENTS: relative path to a requirements.txt to install into each lambda package (optional)
+env:
+  variables:
+    TERRAFORM_RUN: "none"
+    TERRAFORM_WORKING_DIR: "infra"
+    TERRAFORM_VERSION: "1.5.8"
+    PACKAGE_LAMBDAS: "true"
+    PIP_REQUIREMENTS: ""
+
+
 phases:
   install:
     commands:
+      - echo "==== install phase ===="
       - set -e
-      - echo "Installing prerequisites..."
+      - echo "Updating apt-get and installing unzip/zip/wget/jq/python3-pip (if available)..."
       - apt-get update -y || true
-      - apt-get install -y unzip wget jq || true
-      - echo "Installing Terraform..."
-      - wget https://releases.hashicorp.com/terraform/1.5.8/terraform_1.5.8_linux_amd64.zip -O /tmp/terraform.zip
-      - unzip -o /tmp/terraform.zip -d /usr/local/bin
-      - terraform --version
+      - apt-get install -y zip unzip wget jq python3-pip || true
+      - echo "Install awscli if missing (optional)..."
+      - command -v aws >/dev/null 2>&1 || (apt-get install -y awscli || true)
+      - echo "TERRAFORM_RUN=${TERRAFORM_RUN}, PACKAGE_LAMBDAS=${PACKAGE_LAMBDAS}"
+      # install terraform only if requested
+      - |
+        if [ "${TERRAFORM_RUN}" = "plan" ]; then
+          echo "Installing Terraform ${TERRAFORM_VERSION}..."
+          TF_ZIP="/tmp/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          wget -q -O "$TF_ZIP" "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          unzip -o "$TF_ZIP" -d /usr/local/bin
+          terraform --version || true
+        else
+          echo "Skipping Terraform install (TERRAFORM_RUN != plan)"
+        fi
 
   pre_build:
     commands:
-      - echo "Preparing workspace..."
-      - cd infra/terraform
-      - echo "Terraform working directory: $(pwd)"
-      - terraform init -input=false
+      - echo "==== pre_build phase ===="
+      - set -e
+      - echo "Creating dist/ folder for lambda zips"
+      - mkdir -p dist
 
   build:
     commands:
-      - echo "Searching for tfplan produced by the Plan stage..."
+      - echo "==== build phase ===="
+      - set -e
+
+      # 1) Package lambdas
       - |
-        TFPLAN_PATH=$(find /codebuild/output -type f -name 'tfplan*' -print -quit || true)
-        if [ -n "$TFPLAN_PATH" ]; then
-          echo "Found tfplan at: $TFPLAN_PATH"
-          cp "$TFPLAN_PATH" ./tfplan
+        if [ "${PACKAGE_LAMBDAS}" = "true" ]; then
+          echo "Packaging lambdas in ./lambdas/* ..."
+
+          # iterate directories directly under ./lambdas
+          if [ -d lambdas ]; then
+            for d in lambdas/*; do
+              if [ -d "${d}" ]; then
+                name=$(basename "${d}")
+                zip_path="dist/${name}.zip"
+                echo "Packaging lambda '${name}' -> ${zip_path}"
+
+                # If PIP_REQUIREMENTS provided and exists inside lambda dir, create a temporary vendor dir
+                if [ -n "${PIP_REQUIREMENTS}" ] && [ -f "${d}/${PIP_REQUIREMENTS}" ]; then
+                  echo " - Installing python packages from ${d}/${PIP_REQUIREMENTS} into ${d}/.package_tmp"
+                  tmp_pkg="${d}/.package_tmp"
+                  rm -rf "${tmp_pkg}"
+                  mkdir -p "${tmp_pkg}"
+                  pip3 install -r "${d}/${PIP_REQUIREMENTS}" -t "${tmp_pkg}" || true
+                  # copy files to temp folder to zip them
+                  (cd "${d}" && cp -r "${tmp_pkg}"/* .) || true
+                  # zip contents
+                  (cd "${d}" && zip -r -q "../../${zip_path}" .) || true
+                  # cleanup
+                  rm -rf "${tmp_pkg}"
+                else
+                  # simple zip of everything in folder
+                  (cd "${d}" && zip -r -q "../../${zip_path}" .) || true
+                fi
+
+                # print zip info
+                ls -lh "${zip_path}" || true
+              fi
+            done
+          else
+            echo "No lambdas/ directory found — skipping packaging."
+          fi
         else
-          echo "tfplan not found in artifacts."
-        fi
-      - |
-        if [ -f ./tfplan ]; then
-          echo "Applying plan (tfplan) ..."
-          terraform apply -input=false -auto-approve ./tfplan
-        else
-          echo "ERROR: tfplan missing — aborting (to avoid accidental apply)."
-          exit 1
+          echo "PACKAGE_LAMBDAS=false — skipping lambda packaging"
         fi
 
-post_build:
-  commands:
-    - echo "Apply phase finished."
+      # 2) Optionally run terraform init + plan and output tfplan as artifact
+      - |
+        if [ "${TERRAFORM_RUN}" = "plan" ]; then
+          echo "Running terraform init & plan in ${TERRAFORM_WORKING_DIR}..."
+          if [ -d "${TERRAFORM_WORKING_DIR}" ]; then
+            cd "${TERRAFORM_WORKING_DIR}"
+            terraform init -input=false
+            terraform validate || true
+            # choose a stable name for the plan binary
+            PLAN_OUT="tfplan.binary"
+            terraform plan -out="${PLAN_OUT}" -input=false
+            # move plan to top-level artifacts folder so CodePipeline can find it
+            mv "${PLAN_OUT}" ../tfplan.binary || true
+            cd -
+            echo "Terraform plan saved as tfplan.binary"
+          else
+            echo "Terraform working directory '${TERRAFORM_WORKING_DIR}' not found — skipping terraform plan"
+          fi
+        else
+          echo "TERRAFORM_RUN != plan — skipping terraform plan"
+        fi
+
+  post_build:
+    commands:
+      - echo "==== post_build phase ===="
+      - echo "Build finished. Artifacts in dist/ and tfplan.binary (if created)."
+      - echo "List artifacts:"
+      - ls -la dist || true
+      - ls -la tfplan.binary || true
+
+artifacts:
+  files:
+    - dist/**/*
+    - tfplan.binary
+  discard-paths: no
+
+# optional cache block, if you want to cache pip or other artifacts:
+#cache:
+#  paths:
+#    - '/root/.cache/pip/**/*'
