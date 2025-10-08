@@ -20,8 +20,10 @@ phases:
           apt-get install -y terraform || { echo "apt install terraform failed"; exit 1; }
         fi
       - terraform --version || true
-
-      - terraform --version || true
+      - ls -l /tmp/t.zip || true
+      - file /tmp/t.zip || true
+      - head -c 200 /tmp/t.zip | sed -n '1,200p' || true
+      - unzip -l /tmp/t.zip || echo "unzip -l failed with exit $?"
       - unzip -o /tmp/t.zip -d /usr/local/bin
   pre_build:
     commands:
