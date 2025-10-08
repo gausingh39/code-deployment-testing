@@ -12,7 +12,7 @@ phases:
   pre_build:
     commands:
       - echo "Preparing terraform workspace"
-      - cd infra/terraform    # adjust this path to your TF working dir
+      - cd code-deployment-testing
       - terraform init -input=false
   build:
     commands:
