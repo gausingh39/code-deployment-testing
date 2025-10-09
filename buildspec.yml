@@ -20,7 +20,7 @@ phases:
           apt-get install -y terraform || { echo "apt install terraform failed"; exit 1; }
         fi
       - terraform --version || true
-      
+
   pre_build:
     commands:
       - echo "Preparing terraform workspace"
@@ -28,6 +28,7 @@ phases:
   build:
     commands:
       - echo "Running terraform plan"
+      - cd events
       - terraform plan -out=tfplan.binary -input=false
 artifacts:
   files:
