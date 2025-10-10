@@ -15,7 +15,7 @@ variable "bucket" {
 
 variable "dynamodb_table" {
   type = string
-  default = "terraform-lock-table"
+  default = "terraform-lock-table-1"
 }
 
 
