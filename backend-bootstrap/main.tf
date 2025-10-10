@@ -57,7 +57,7 @@ resource "aws_dynamodb_table" "locks" {
 resource "aws_ssm_parameter" "backend_bucket" {
   name        = "/terraform-backend/${var.name}/bucket"
   type        = "String"
-  value       = var.bucket == "" ? aws_s3_bucket.tfstate[0].id : var.bucket
+  value       = var.bucket 
   overwrite   = true
   tags        = var.tags
 }
@@ -82,7 +82,7 @@ resource "aws_ssm_parameter" "backend_region" {
 
 output "bucket" {
   description = "S3 bucket used for Terraform state"
-  value       =  var.bucket == "" ? aws_s3_bucket.tfstate[0].id : var.bucket
+  value       =  var.bucket
 }
 
 output "dynamodb_table" {
