@@ -23,3 +23,9 @@ variable "tags" {
   type = map(string)
   default = {}
 }
+
+variable "bootstrap_codebuild_role_name" {
+  description = "Name of the existing CodeBuild role to attach the backend-bootstrap policy to (e.g. codebuild-service-role)"
+  type        = string
+  default     = "codebuild-service-role"
+}
