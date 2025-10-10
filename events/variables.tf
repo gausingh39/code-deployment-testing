@@ -1,6 +1,7 @@
 variable "name" {
   description = "Base name prefix for resources created by this module"
   type        = string
+  default     = ""
 }
 
 variable "schedule_expression" {

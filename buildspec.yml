@@ -1,5 +1,25 @@
 version: 0.2
 
+env:
+  variables:
+    BOOTSTRAP: "true"
+
+      # Backend discovery name used as SSM prefix: /terraform-backend/${BACKEND_NAME}/...
+    BACKEND_NAME: "my-org-backend"      # change or override in CodeBuild env
+
+    # Optional: If you want to explicitly provide a bucket (or let bootstrap generate it), set here.
+    BACKEND_BUCKET: ""                  # if empty and BOOTSTRAP=true, bootstrap will require -var bucket via build env
+    AWS_REGION: "us-east-1"
+
+    # Terraform / packaging flags used later
+    TERRAFORM_VERSION: "1.5.8"
+    TERRAFORM_WORKING_DIR: "infra"      # path (inside repo) containing the Terraform code to plan
+    ENVIRONMENT: "dev"                  # used to build state key: ${ENVIRONMENT}/terraform.tfstate
+
+    PACKAGE_LAMBDAS: "true"
+    PIP_REQUIREMENTS: ""                # path relative to each lambda folder, e.g. requirements.txt
+
+
 phases:
   install:
     commands:
@@ -24,11 +44,24 @@ phases:
   pre_build:
     commands:
       - echo "Preparing terraform workspace"
-      - terraform init -input=false
+      - cd backend-bootstrap
+      - terraform init
+      - terraform apply -auto-approve -var="bucket=${BACKEND_BUCKET}" -var="region=${AWS_REGION}" -var="name=${BACKEND_NAME}"
+      - export PREFIX="/terraform-backend/${BACKEND_NAME}"
+      - export BUCKET=$(aws ssm get-parameter --name "${PREFIX}/bucket" --query Parameter.Value --output text)
+      - export DDB=$(aws ssm get-parameter --name "${PREFIX}/dynamodb_table" --query Parameter.Value --output text)
+      - export REGION=$(aws ssm get-parameter --name "${PREFIX}/region" --query Parameter.Value --output text)
+      - |
+        terraform init \
+          -backend-config="bucket=${BUCKET}" \
+          -backend-config="key=${ENVIRONMENT}/terraform.tfstate" \
+          -backend-config="region=${REGION}" \
+          -backend-config="dynamodb_table=${DDB}" \
+          -backend-config="encrypt=true"
+
   build:
     commands:
       - echo "Running terraform plan"
-      - cd events
       - terraform plan -out=tfplan.binary -input=false
 artifacts:
   files:
