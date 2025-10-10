@@ -11,6 +11,7 @@ variable "region" {
 variable "bucket" {
   type = string
   description = "S3 bucket name for terraform state (must be globally unique)"
+  default     = ""
 }
 
 variable "dynamodb_table" {

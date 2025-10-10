@@ -1,3 +1,11 @@
+resource "random_id" "id" {
+  count       = var.bucket == "" ? 1 : 0
+  byte_length = 4
+  keepers = {
+    name = var.name
+  }
+}
+
 resource "aws_s3_bucket" "tfstate" {
   bucket = var.bucket
   acl    = "private"
@@ -15,6 +23,12 @@ resource "aws_s3_bucket" "tfstate" {
   }
 
   tags = merge(var.tags, { "Name" = var.bucket })
+}
+
+# If user provided var.bucket, create a data source mapping so outputs still work
+data "aws_s3_bucket" "provided" {
+  count  = var.bucket == "" ? 0 : 1
+  bucket = var.bucket
 }
 
 resource "aws_s3_bucket_public_access_block" "tfstate_block" {
@@ -43,7 +57,7 @@ resource "aws_dynamodb_table" "locks" {
 resource "aws_ssm_parameter" "backend_bucket" {
   name        = "/terraform-backend/${var.name}/bucket"
   type        = "String"
-  value       = aws_s3_bucket.tfstate.id
+  value       = var.bucket == "" ? aws_s3_bucket.tfstate[0].id : var.bucket
   overwrite   = true
   tags        = var.tags
 }
@@ -68,7 +82,7 @@ resource "aws_ssm_parameter" "backend_region" {
 
 output "bucket" {
   description = "S3 bucket used for Terraform state"
-  value       = aws_s3_bucket.tfstate.id
+  value       =  var.bucket == "" ? aws_s3_bucket.tfstate[0].id : var.bucket
 }
 
 output "dynamodb_table" {
