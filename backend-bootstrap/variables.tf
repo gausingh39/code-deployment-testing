@@ -18,10 +18,6 @@ variable "dynamodb_table" {
   default = "terraform-lock-table"
 }
 
-variable "enable_kms" {
-  type = bool
-  default = false
-}
 
 variable "tags" {
   type = map(string)

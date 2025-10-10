@@ -6,8 +6,7 @@ resource "aws_s3_bucket" "tfstate" {
   server_side_encryption_configuration {
     rule {
       apply_server_side_encryption_by_default {
-        sse_algorithm     = var.enable_kms ? "aws:kms" : "AES256"
-        kms_master_key_id = var.enable_kms ? aws_kms_key.tf_state[0].arn : null
+        sse_algorithm     = "AES256"
       }
     }
   }
@@ -66,16 +65,19 @@ resource "aws_ssm_parameter" "backend_region" {
   tags      = var.tags
 }
 
-resource "aws_ssm_parameter" "backend_kms" {
-  count = var.enable_kms ? 1 : 0
-  name  = "/terraform-backend/${var.name}/kms_key_arn"
-  type  = "String"
-  value = aws_kms_key.tf_state[0].arn
-  overwrite = true
-  tags = var.tags
+
+
+output "bucket" {
+  description = "S3 bucket used for Terraform state"
+  value       = aws_s3_bucket.tfstate.id
 }
 
-output "bucket" { value = aws_s3_bucket.tfstate.id }
-output "dynamodb_table" { value = aws_dynamodb_table.locks.name }
-output "region" { value = var.region }
-output "kms_key_arn" { value = var.enable_kms ? aws_kms_key.tf_state[0].arn : "" }
+output "dynamodb_table" {
+  description = "DynamoDB table used for Terraform state locking"
+  value       = aws_dynamodb_table.locks.name
+}
+
+output "region" {
+  description = "Region where backend resources live"
+  value       = var.region
+}
